@@ -343,6 +343,9 @@ def predict(args):
     """
     predicts answers for test files
     """
+    if not os.path.exists(args.result_dir):
+        os.makedirs(dir_path)
+        
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
