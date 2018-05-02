@@ -1,0 +1,1 @@
+./jwe -train ../data/DuReader_v2.0_preprocess.train.json -output-word ../data/word_vec -output-char ../data/char_vec -output-comp ../data/comp_vec -size 300 -window 5 -sample 1e-4 -negative 10 -iter 10 -threads 8 -min-count 2 -alpha 0.025 -binary 0 -comp ../subcharacter/comp.txt -char2comp ../subcharacter/char2comp.txt -join-type 1 -pos-type 3 -average-sum 1
