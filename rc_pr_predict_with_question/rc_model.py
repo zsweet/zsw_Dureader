@@ -60,6 +60,7 @@ class RCModel(object):
         self.batch_size = args.batch_size
         self.train_as = args.train_as
         self.train1 = True
+        self.label_mark = args.label_mark
 
         # length limit
         self.max_p_num = args.max_p_num
@@ -189,14 +190,14 @@ class RCModel(object):
             #self.label = tf.expand_dims(self.label, 1)
             #p_label = tf.tile(self.label, [1, tf.shape(self.p_emb)[1], 1])
             #q_label = tf.tile(self.label, [1, tf.shape(self.q_emb)[1], 1])
-
-            #p_label = tf.tile(self.label, [tf.shape(self.p_emb)[1], 1])
-            #p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
-            #q_label = tf.tile(self.label, [tf.shape(self.q_emb)[1], 1])
-            #q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
-            #self.logger.info('p_emb shape :{}, q_emb :{} p_label:{} ,q_label: {}'.format(tf.shape(self.p_emb),tf.shape(self.q_emb),tf.shape(self.p_label),tf.shape(self.q_label)))
-            #self.p_emb = tf.concat([self.p_emb, p_label], 2)
-            #self.q_emb = tf.concat([self.q_emb, q_label], 2)
+            if self.label_mark:
+                p_label = tf.tile(self.label, [tf.shape(self.p_emb)[1], 1])
+                p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
+                q_label = tf.tile(self.label, [tf.shape(self.q_emb)[1], 1])
+                q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
+                #self.logger.info('p_emb shape :{}, q_emb :{} p_label:{} ,q_label: {}'.format(tf.shape(self.p_emb),tf.shape(self.q_emb),tf.shape(self.p_label),tf.shape(self.q_label)))
+                self.p_emb = tf.concat([self.p_emb, p_label], 2)
+                self.q_emb = tf.concat([self.q_emb, q_label], 2)
 
          #   self.logger.info('p_emb shape :{}, q_emb :{}'.format(tf.shape(self.p_emb),tf.shape(self.q_emb)))
 

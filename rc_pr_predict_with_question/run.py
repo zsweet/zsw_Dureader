@@ -64,6 +64,9 @@ def parse_args():
                                 help='train epochs')
     train_settings.add_argument('--train_as', type=bool, default=False,
                                 help='train epochs')
+    train_settings.add_argument('--label_mark', type=bool, default=False,
+                                help='true for add 5 label')
+
 
 
     model_settings = parser.add_argument_group('model settings')
@@ -344,8 +347,8 @@ def predict(args):
     predicts answers for test files
     """
     if not os.path.exists(args.result_dir):
-        os.makedirs(dir_path)
-        
+        os.makedirs(args.result_dirS)
+
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
