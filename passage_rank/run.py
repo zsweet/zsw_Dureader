@@ -67,7 +67,7 @@ def parse_args():
 
 
     model_settings = parser.add_argument_group('model settings')
-    model_settings.add_argument('--algo', choices=['BIDAF', 'MLSTM'], default='BIDAF',
+    model_settings.add_argument('--algo', default='BIDAF',
                                 help='choose the algorithm to use')
     model_settings.add_argument('--embed_size', type=int, default=300,
                                 help='size of the embeddings')
@@ -98,7 +98,7 @@ def parse_args():
     #                           help='list of files that contain the preprocessed test data')
 
     path_settings.add_argument('--test_files', nargs='+',
-                             default=['../data/test1set/preprocessed/search.test1.json' ],
+                             default=['../data/broad_test/search.test.json','../data/broad_test/zhidao.test.json' ],
                              help='list of files that contain the preprocessed test data')
     path_settings.add_argument('--brc_dir', default='../data/baidu',
                                help='the dir with preprocessed baidu reading comprehension data')
@@ -192,7 +192,7 @@ def predict(args):
         vocab = pickle.load(fin)
     assert len(args.test_files) > 0, 'No test files are provided.'
 
-    brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.test_files, test=True)
+    brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.test_files, test=True)
 
     logger.info('Converting text into ids...')
     brc_data.convert_to_ids(vocab)
@@ -204,7 +204,7 @@ def predict(args):
     test_batches = brc_data.gen_mini_batches('test', args.batch_size,
                                              pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
     rc_model.evaluate(test_batches,
-                       result_dir=args.result_dir, result_prefix='test.predicted', test = True)
+                       result_dir=args.result_dir, result_prefix='broad_test_pr', test = True)
 
 def run():
     """

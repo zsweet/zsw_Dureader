@@ -95,13 +95,13 @@ class S_netModel():
             self.q_emb = tf.nn.embedding_lookup(self.word_embeddings, self.q)
           #  self.p_mask = tf.cast(self.p_emb, tf.bool)
 
-            p_label = tf.tile(self.class_label, [tf.shape(self.p_emb)[1], 1])
-            p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
-            q_label = tf.tile(self.class_label, [tf.shape(self.q_emb)[1], 1])
-            q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
+            #p_label = tf.tile(self.class_label, [tf.shape(self.p_emb)[1], 1])
+            #p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
+            #q_label = tf.tile(self.class_label, [tf.shape(self.q_emb)[1], 1])
+            #q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
 
-            self.p_emb = tf.concat([self.p_emb, p_label], 2)
-            self.q_emb = tf.concat([self.q_emb, q_label], 2)
+            #self.p_emb = tf.concat([self.p_emb, p_label], 2)
+            #self.q_emb = tf.concat([self.q_emb, q_label], 2)
 
 
     def _encode(self):
@@ -261,7 +261,7 @@ class S_netModel():
         total = 0
         dc = 0
 
-
+        fout = open(os.path.join(result_dir, result_prefix), 'w')
         for b_itx, batch in enumerate(eval_batches):
 
             if test == False:
@@ -344,12 +344,13 @@ class S_netModel():
 
                 pred_answers = []
 
-                for qid, docID in zip(batch['question_id'], batch['doc_idx']):
+
+                for qid, docID, index_bag in zip(batch['question_id'], batch['doc_idx'], batch['index']):  ############
 
                     if CT % self.max_para ==0:
                         rdx = CT/self.max_para
                         pred_answers.append({'question_id' : qid,
-                                             'best' : best[rdx],
+                                             'best' : index_bag[best[int(rdx)]],  ####################
                                              'doc_num' : docID})
                         dc += 1
                         if dc % 10000 == 0:
@@ -358,7 +359,6 @@ class S_netModel():
 
                     CT += 1
 
-                fout = open(os.path.join(result_dir, result_prefix),'w')
                 for pred_answer in pred_answers:
                     fout.write(json.dumps(pred_answer, ensure_ascii=False) + '\n')
         self.logger.info('Right {} of Total {}'.format(count, total))

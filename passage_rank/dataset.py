@@ -61,6 +61,7 @@ class BRCDataset(object):
     def compute_rank(self, answer, fake_answer, number = 0):
         number = self.max_para
         para_infos = []
+        count = 0##################
         for answer_tokens in answer:
             fake_tokens = fake_answer
             common_with_question = Counter(answer_tokens) & Counter(fake_tokens)
@@ -73,10 +74,13 @@ class BRCDataset(object):
                 recall_wrt_question = -1
             elif answer_tokens[0] == '.' and len(answer_tokens) == 2:
                 recall_wrt_question = -1
-            para_infos.append((answer_tokens, recall_wrt_question, len(answer_tokens)))
+            para_infos.append((answer_tokens, recall_wrt_question, len(answer_tokens),count))##################
+            count+=1  ###########
         para_infos.sort(key=lambda x: (-x[1], x[2]))
 
         rank_bag = []
+        index_bag = []  ###########################
+
 
         # Select top number para
         for i in range(number):
@@ -84,7 +88,9 @@ class BRCDataset(object):
             for para_info in para_infos[i:i+1]:
                 fake_passage_tokens += para_info[0]
             rank_bag.append(fake_passage_tokens)
-        return rank_bag
+            index_bag.append(para_infos[i][3])  #####################################
+        return rank_bag, index_bag  ##########################
+
 
     def split_dataset_proportions(self, dataset):
         train_prop, val_prop, test_prop =[0.95, 0.025, 0.025]
@@ -171,19 +177,20 @@ class BRCDataset(object):
                     if train:
                         most_related_para = doc['most_related_para']
                         gold_p = doc['segmented_paragraphs'][most_related_para]
-                        rank_p = self.compute_rank(refer_p, gold_p)
+                        rank_p, index = self.compute_rank(refer_p, gold_p)  ############################
 
-                        pack_p = list(zip(rank_p, rank))
+                        pack_p = list(zip(rank_p, rank, index))  ############
                         random.shuffle(pack_p)
-                        rank_p[:],rank[:] = zip(*pack_p)
+                        rank_p[:], rank[:], index[:] = zip(*pack_p)  ####################
 
                         sample2['passages']={'passage_rank': rank_p}
-
+                        sample2['index'] = index  ###########################
                         sample2['rank'] = rank
                         sample2['doc_idx'] = d_idx
                     if test:
-                        rank_p = self.compute_rank(refer_p, sample['segmented_question'])
+                        rank_p,index = self.compute_rank(refer_p, sample['segmented_question'])#############################
                         sample2['passages'] = {'passage_rank': rank_p}
+                        sample2['index'] = index  ###########################
 
                         sample2['rank'] = rank
                         sample2['doc_idx'] = d_idx
@@ -228,7 +235,8 @@ class BRCDataset(object):
                       'label': [],
                       'question_id': [],
                       'doc_idx' : [],
-                      'class_label':[]
+                      'class_label':[],
+                      'index':[]#######################
                       }
 
         for sidx, sample in enumerate(batch_data['raw_data']):
@@ -237,6 +245,9 @@ class BRCDataset(object):
                 batch_data['question_length'].append(len(sample['question_token_ids']))
                 passage_token_ids = sample['passages']['passage_token_ids'][pidx]
                 batch_data['passage_token_ids'].append(passage_token_ids)
+
+                batch_data['index'].append(sample['index'])  #######################
+
                 batch_data['passage_length'].append(min(len(passage_token_ids), self.max_p_len))
                 rank_id = sample['rank'][pidx]
                 batch_data['label'].append(rank_id)
