@@ -90,7 +90,7 @@ class S_netModel():
            # self.p_mask = tf.cast(self.p_emb, tf.bool)
             self.q_emb = tf.nn.embedding_lookup(self.word_embeddings, self.q)
           #  self.p_mask = tf.cast(self.p_emb, tf.bool)
-
+           
             p_label = tf.tile(self.class_label, [tf.shape(self.p_emb)[1], 1])
             p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
             q_label = tf.tile(self.class_label, [tf.shape(self.q_emb)[1], 1])
@@ -99,6 +99,7 @@ class S_netModel():
             self.p_emb = tf.concat([self.p_emb, p_label], 2)
             self.q_emb = tf.concat([self.q_emb, q_label], 2)
 
+          
 
     def _encode(self):
         """
@@ -111,7 +112,7 @@ class S_netModel():
         if self.use_dropout:
             self.sep_p_encodes = tf.nn.dropout(self.sep_p_encodes, self.dropout_keep_prob)  ###T*300
             self.sep_q_encodes = tf.nn.dropout(self.sep_q_encodes, self.dropout_keep_prob)  ###J*300
-        print ('paragram',self.sep_p_encodes,'qestion',self.sep_q_encodes)
+        #print ('paragram',self.sep_p_encodes,'qestion',self.sep_q_encodes)
 
 
 
@@ -247,8 +248,9 @@ class S_netModel():
         total = 0
         score  = ave_loss = -1
 
+        batch_count = 0
         for b_itx, batch in enumerate(eval_batches):
-
+                batch_count += 1
                 feed_dict = {self.p: batch['passage_token_ids'],
                              self.q: batch['question_token_ids'],
                              self.p_length: batch['passage_length'],
@@ -304,8 +306,9 @@ class S_netModel():
 
                 score = 1.0 * count / total
                 ave_loss = 1.0 * total_loss / total_num
-
-        self.logger.info('Right {} of Total {}'.format(count, total))
+                if total % 1000 == 0:
+                    self.logger.info('Right {} of Total {},accuracy rate {}'.format(count, total,count*1.0/total))
+        self.logger.info('Right {} of Total {},accuracy rate {}'.format(count, total, count * 1.0 / total))
         # compute the bleu and rouge scores if reference answers is provided
         return ave_loss, score
 
@@ -354,7 +357,7 @@ class S_netModel():
                     CT += 1
                 for pred_answer in pred_answers:
                     fout.write(json.dumps(pred_answer, ensure_ascii=False) + '\n')
-        self.logger.info('Right {} of Total {}'.format(count, total))
+
 
 
     def save(self, model_dir, model_prefix):

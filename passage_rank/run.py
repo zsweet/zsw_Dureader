@@ -90,7 +90,7 @@ def parse_args():
                                help='list of files that contain the preprocessed train data')
     #path_settings.add_argument('--train_files', nargs='+',default=['../data/demo/trainset/search.train.json'], help='list of files that contain the preprocessed train data')
     path_settings.add_argument('--dev_files', nargs='+',
-                               default=['../data/preprocessed/devset/search.dev.json'],
+                               default=['../data/preprocessed/devset/search.dev.json','../data/preprocessed/devset/zhidao.dev.json'],
                                help='list of files that contain the preprocessed dev data')
 
     #path_settings.add_argument('--test_files', nargs='+',
@@ -176,7 +176,7 @@ def train(args):
     rc_model.evaluate(test_batches,result_dir=args.result_dir, result_prefix='test.predicted')
     logger.info('Done with model evaluating !')
 
-def predict(args):
+def evaluate(args):
     """
        predicts answers for test files
        """
@@ -196,11 +196,35 @@ def predict(args):
     rc_model = S_netModel(vocab, args)
     logger.info('Restoring the model...')
     rc_model.restore(model_dir=args.model_dir, model_prefix=args.algo)
-    logger.info('Predicting answers for test set...')
+    logger.info('evaluate answers for dev set...')
     test_batches = brc_data.gen_mini_batches('dev', args.batch_size,pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
     #rc_model.predict(test_batches,result_dir=args.result_dir, result_prefix=args.result_prefix)
     rc_model.evaluate(test_batches, result_dir=args.result_dir, result_prefix=args.result_prefix)
 
+def predict(args):
+    """
+       predicts answers for test files
+       """
+    logger = logging.getLogger("brc")
+    logger.info('Load data_set and vocab...')
+    with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
+        vocab = pickle.load(fin)
+  #  assert len(args.test_files) > 0, 'No test files are provided.'
+
+
+    brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.test_files, use_type="test")
+   # brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.dev_files, use_type="dev")
+
+    logger.info('Converting text into ids...')
+    brc_data.convert_to_ids(vocab)
+
+    rc_model = S_netModel(vocab, args)
+    logger.info('Restoring the model...')
+    rc_model.restore(model_dir=args.model_dir, model_prefix=args.algo)
+    logger.info('Predicting answers for test set...')
+    test_batches = brc_data.gen_mini_batches('test', args.batch_size,pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
+    rc_model.predict(test_batches,result_dir=args.result_dir, result_prefix=args.result_prefix)
+    #rc_model.evaluate(test_batches, result_dir=args.result_dir, result_prefix=args.result_prefix)
 
 def run():
     """
@@ -231,6 +255,7 @@ def run():
         train(args)
     if args.predict:
         predict(args)
-
+    if args.evaluate:
+        evaluate(args)
 if __name__ == '__main__':
     run()
