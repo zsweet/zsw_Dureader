@@ -27,7 +27,6 @@ class S_netModel():
         self.batch_size = args.batch_size
         self.train_as = args.train_as
         self.vocab = vocab
-        self.train1 = True
 
         # session info
         sess_config = tf.ConfigProto()
@@ -87,21 +86,18 @@ class S_netModel():
                 trainable=True
             )
 
-
-
-
             self.p_emb = tf.nn.embedding_lookup(self.word_embeddings, self.p)
            # self.p_mask = tf.cast(self.p_emb, tf.bool)
             self.q_emb = tf.nn.embedding_lookup(self.word_embeddings, self.q)
           #  self.p_mask = tf.cast(self.p_emb, tf.bool)
 
-            #p_label = tf.tile(self.class_label, [tf.shape(self.p_emb)[1], 1])
-            #p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
-            #q_label = tf.tile(self.class_label, [tf.shape(self.q_emb)[1], 1])
-            #q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
-
-            #self.p_emb = tf.concat([self.p_emb, p_label], 2)
-            #self.q_emb = tf.concat([self.q_emb, q_label], 2)
+            p_label = tf.tile(self.class_label, [tf.shape(self.p_emb)[1], 1])
+            p_label = tf.reshape(p_label, [tf.shape(self.p_emb)[0], -1, 5])
+            q_label = tf.tile(self.class_label, [tf.shape(self.q_emb)[1], 1])
+            q_label = tf.reshape(q_label, [tf.shape(self.q_emb)[0], -1, 5])
+            
+            self.p_emb = tf.concat([self.p_emb, p_label], 2)
+            self.q_emb = tf.concat([self.q_emb, q_label], 2)
 
 
     def _encode(self):
@@ -109,9 +105,9 @@ class S_netModel():
         Employs two Bi-LSTMs to encode passage and question separately
         """
         with tf.variable_scope('passage_encoding'):
-            self.sep_p_encodes, _ = rnn('bi-lstm', self.p_emb, self.p_length, self.hidden_size)
+            self.sep_p_encodes, _ = rnn('bi-lstm', self.p_emb, self.p_length, self.hidden_size,dropout_keep_prob=self.dropout_keep_prob)
         with tf.variable_scope('question_encoding'):
-            self.sep_q_encodes, _ = rnn('bi-lstm', self.q_emb, self.q_length, self.hidden_size)  ##???????????
+            self.sep_q_encodes, _ = rnn('bi-lstm', self.q_emb, self.q_length, self.hidden_size,dropout_keep_prob=self.dropout_keep_prob)  ##???????????
         if self.use_dropout:
             self.sep_p_encodes = tf.nn.dropout(self.sep_p_encodes, self.dropout_keep_prob)  ###T*300
             self.sep_q_encodes = tf.nn.dropout(self.sep_q_encodes, self.dropout_keep_prob)  ###J*300
@@ -121,10 +117,8 @@ class S_netModel():
 
     def _weightQestionAttention(self):
         with tf.variable_scope('weight_question_attention'):
-
             self.q_mask = tf.cast(self.q, tf.bool)
-            self.weight_q_encodes = summ(self.sep_q_encodes[:, :, -2 * self.hidden_size:], self.hidden_size, mask=self.q_mask,
-                 keep_prob=self.dropout_keep_prob, is_train=False)
+            self.weight_q_encodes = summ(self.sep_q_encodes[:, :, -2 * self.hidden_size:], self.hidden_size, mask=self.q_mask,keep_prob=self.use_dropout, is_train=False)
 
     def _weightParagraphAttention(self):
         with tf.variable_scope('weight_p_attention'):
@@ -244,27 +238,16 @@ class S_netModel():
             else:
                 self.save(save_dir, save_prefix + '_epoch' + str(epoch))
 
-    def evaluate(self, eval_batches, result_dir=None, result_prefix=None, save_full_info=False, test = False,epoch_mark='_epoch0'):
-        """
-        Evaluates the model performance on eval_batches and results are saved if specified
-        Args:
-            eval_batches: iterable batch data
-            result_dir: directory to save predicted answers, answers will not be saved if None
-            result_prefix: prefix of the file for saving predicted answers,
-                           answers will not be saved if None
-            save_full_info: if True, the pred_answers will be added to raw sample and saved
-        """
+
+    def evaluate(self, eval_batches, result_dir=None, result_prefix=None,epoch_mark=""):
         pred_answers, ref_answers = [], []
         self.train1 = False
         total_loss, total_num = 0, 0
         count = 0
         total = 0
-        dc = 0
+        score  = ave_loss = -1
 
-        fout = open(os.path.join(result_dir, result_prefix), 'w')
         for b_itx, batch in enumerate(eval_batches):
-
-            if test == False:
 
                 feed_dict = {self.p: batch['passage_token_ids'],
                              self.q: batch['question_token_ids'],
@@ -272,14 +255,14 @@ class S_netModel():
                              self.q_length: batch['question_length'],
                              self.l: batch['label'],
                              self.dropout_keep_prob: 1.0,
-                             self.class_label:batch['class_label']
+                             self.class_label: batch['class_label']
                              }
-                rank, lable, loss = self.sess.run([self.rank,self.lable1, self.loss], feed_dict)
+                rank, lable, loss = self.sess.run([self.rank, self.lable1, self.loss], feed_dict)
 
                 total_loss += loss * len(batch['raw_data'])
                 total_num += len(batch['raw_data'])
                 padded_p_len = len(batch['passage_token_ids'][0])
-                #self.logger.info('example {}'.format(sample_ids[0]))
+                # self.logger.info('example {}'.format(sample_ids[0]))
 
                 best_true = []
                 best_pred = []
@@ -294,7 +277,7 @@ class S_netModel():
                     best_pred.append(a1)
 
                     if a1 == b1:
-                        count +=1
+                        count += 1
                 total += len(rank)
                 tc = 0
                 TC = 0
@@ -305,23 +288,41 @@ class S_netModel():
                     q1 = ''.join(self.vocab.recover_from_ids(q))
                     q2 = q1.replace('<blank>', '')
                     pred_answers.append({'passage': passage2})
-                    if tc %self.max_para == 0:
+                    if tc % self.max_para == 0:
                         tc = 0
 
-                        pred_answers.append({'Question' : q2,
+                        pred_answers.append({'Question': q2,
                                              'True': [best_true[TC]],
-                                             'Pred' : [best_pred[TC]]})
+                                             'Pred': [best_pred[TC]]})
                         TC += 1
                 if result_dir is not None and result_prefix is not None:
-                    result_file = os.path.join(result_dir, result_prefix + epoch_mark+ '.json')
+                    fileName = result_prefix + epoch_mark
+                    result_file = os.path.join(result_dir, fileName)
                     with open(result_file, 'w') as fout:
                         for pred_answer in pred_answers:
                             fout.write(json.dumps(pred_answer, ensure_ascii=False) + '\n')
 
-
-                score = 1.0 * count/total
+                score = 1.0 * count / total
                 ave_loss = 1.0 * total_loss / total_num
-            else:
+
+        self.logger.info('Right {} of Total {}'.format(count, total))
+        # compute the bleu and rouge scores if reference answers is provided
+        return ave_loss, score
+
+
+    def predict(self, eval_batches, result_dir=None, result_prefix=None):
+        """
+        Evaluates the model performance on eval_batches and results are saved if specified
+        Args:
+            eval_batches: iterable batch data
+            result_dir: directory to save predicted answers, answers will not be saved if None
+            result_prefix: prefix of the file for saving predicted answers,
+                           answers will not be saved if None
+            save_full_info: if True, the pred_answers will be added to raw sample and saved
+        """
+        count = total = dc = 0
+        fout = open(os.path.join(result_dir, result_prefix), 'w')
+        for b_itx, batch in enumerate(eval_batches):
                 feed_dict = {self.p: batch['passage_token_ids'],
                              self.q: batch['question_token_ids'],
                              self.p_length: batch['passage_length'],
@@ -332,8 +333,6 @@ class S_netModel():
                              }
                 rank = self.sess.run([self.rank], feed_dict)
                 CT= 0
-                qid = 0
-                pd = 0
                 best = []
 
                 for a in rank[0]:
@@ -341,10 +340,7 @@ class S_netModel():
                     a1 = a.index(max(a))
                     best.append(a1)
 
-
                 pred_answers = []
-
-
                 for qid, docID, index_bag in zip(batch['question_id'], batch['doc_idx'], batch['index']):  ############
 
                     if CT % self.max_para ==0:
@@ -355,18 +351,12 @@ class S_netModel():
                         dc += 1
                         if dc % 10000 == 0:
                             self.logger.info('Question saved: {}'.format(dc))
-
-
                     CT += 1
-
                 for pred_answer in pred_answers:
                     fout.write(json.dumps(pred_answer, ensure_ascii=False) + '\n')
         self.logger.info('Right {} of Total {}'.format(count, total))
-        # compute the bleu and rouge scores if reference answers is provided
-        if test:
-            return
-        else:
-            return ave_loss, score
+
+
     def save(self, model_dir, model_prefix):
         """
         Saves the model into model_dir with model_prefix as the model indicator

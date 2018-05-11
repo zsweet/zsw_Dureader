@@ -100,18 +100,14 @@ def parse_args():
     path_settings.add_argument('--test_files', nargs='+',
                              default=['../data/broad_test/search.test.json','../data/broad_test/zhidao.test.json' ],
                              help='list of files that contain the preprocessed test data')
-    path_settings.add_argument('--brc_dir', default='../data/baidu',
-                               help='the dir with preprocessed baidu reading comprehension data')
     path_settings.add_argument('--vocab_dir', default='../data/vocab/pr',
                                help='the dir to save vocabulary')
     path_settings.add_argument('--model_dir', default='../data/models/pr',
                                help='the dir to store models')
-    path_settings.add_argument('--sys_dir', default='../data/models/pr',
-                               help='the dir to store models')
     path_settings.add_argument('--result_dir', default='../data/results/pr',
                                help='the dir to output the results')
-    path_settings.add_argument('--summary_dir', default='../data/summary',
-                               help='the dir to write tensorboard summary')
+    path_settings.add_argument('--result_prefix', default='dev_result',
+                               help='the dir to output file name the results')
     path_settings.add_argument('--log_path',
                                help='path of the log file. If not set, logs are printed to console')
     path_settings.add_argument('--word_embedding_path',default='../data/jwe_word2vec_size300.txt',
@@ -121,7 +117,7 @@ def parse_args():
 
 
 
-def prepare(args):
+def train(args):
     """
     checks data, creates the directories, prepare the vocabulary and embeddings
     """
@@ -130,7 +126,7 @@ def prepare(args):
     for data_path in args.train_files + args.dev_files + args.test_files:
         assert os.path.exists(data_path), '{} file does not exist.'.format(data_path)
     logger.info('Preparing the directories...')
-    for dir_path in [args.vocab_dir, args.model_dir, args.result_dir, args.summary_dir]:
+    for dir_path in [args.vocab_dir, args.model_dir, args.result_dir]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
@@ -172,15 +168,13 @@ def prepare(args):
     #rc_model.restore(model_dir=args.model_dir, model_prefix=args.algo +'sys')
     #if args.train_as:
     #    rc_model.restore(model_dir=args.model_dir, model_prefix=args.algo + 'syst')
-    rc_model.train(brc_data, args.epochs, args.batch_size, save_dir=args.model_dir,
-                   save_prefix=args.algo,
-                   dropout_keep_prob=args.dropout_keep_prob)
+    rc_model.train(brc_data, args.epochs, args.batch_size, save_dir=args.model_dir,save_prefix=args.algo,dropout_keep_prob=args.dropout_keep_prob)
     logger.info('Done with model training!')
-    test_batches = brc_data.gen_mini_batches('test', args.batch_size,
-                                             pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
-    rc_model.evaluate(test_batches,
-                      result_dir=args.result_dir, result_prefix='test.predicted')
 
+    logger.info('evaluate the trained model!')
+    test_batches = brc_data.gen_mini_batches('test', args.batch_size,pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
+    rc_model.evaluate(test_batches,result_dir=args.result_dir, result_prefix='test.predicted')
+    logger.info('Done with model evaluating !')
 
 def predict(args):
     """
@@ -190,9 +184,11 @@ def predict(args):
     logger.info('Load data_set and vocab...')
     with open(os.path.join(args.vocab_dir, 'vocab.data'), 'rb') as fin:
         vocab = pickle.load(fin)
-    assert len(args.test_files) > 0, 'No test files are provided.'
+  #  assert len(args.test_files) > 0, 'No test files are provided.'
 
-    brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.test_files, test=True)
+
+   # brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.test_files, use_type="test")
+    brc_data = BRCDataset(args.max_p_num, args.max_p_len, args.max_q_len, args.max_train_sample_num,args.dev_files, use_type="dev")
 
     logger.info('Converting text into ids...')
     brc_data.convert_to_ids(vocab)
@@ -201,10 +197,10 @@ def predict(args):
     logger.info('Restoring the model...')
     rc_model.restore(model_dir=args.model_dir, model_prefix=args.algo)
     logger.info('Predicting answers for test set...')
-    test_batches = brc_data.gen_mini_batches('test', args.batch_size,
-                                             pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
-    rc_model.evaluate(test_batches,
-                       result_dir=args.result_dir, result_prefix='broad_test_pr', test = True)
+    test_batches = brc_data.gen_mini_batches('dev', args.batch_size,pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
+    #rc_model.predict(test_batches,result_dir=args.result_dir, result_prefix=args.result_prefix)
+    rc_model.evaluate(test_batches, result_dir=args.result_dir, result_prefix=args.result_prefix)
+
 
 def run():
     """
@@ -231,12 +227,8 @@ def run():
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    if args.prepare:
-        prepare(args)
     if args.train:
         train(args)
-    if args.evaluate:
-        evaluate(args)
     if args.predict:
         predict(args)
 

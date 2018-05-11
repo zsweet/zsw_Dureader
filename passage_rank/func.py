@@ -3,10 +3,10 @@ import tensorflow as tf
 INF = 1e30
 
 
-
+#memory question embedding forword and backword result
 def summ(memory, hidden, mask, keep_prob=1.0, is_train=None, scope="summ"):
     with tf.variable_scope(scope):
-        d_memory = memory
+        d_memory = dropout(memory, keep_prob=keep_prob, is_train=is_train)
         s0 = tf.nn.tanh(dense(d_memory, hidden, scope="s0"))
         s = dense(s0, 1, use_bias=False, scope="s")
         s1 = softmax_mask(tf.squeeze(s, [2]), mask)
@@ -14,7 +14,18 @@ def summ(memory, hidden, mask, keep_prob=1.0, is_train=None, scope="summ"):
         res = tf.reduce_sum(a * memory, axis=1)
         return res
 
-
+def dropout(args, keep_prob, is_train, mode="recurrent"):
+    if keep_prob < 1.0:
+        noise_shape = None
+        scale = 1.0
+        shape = tf.shape(args)
+        if mode == "embedding":
+            noise_shape = [shape[0], 1]
+            scale = keep_prob
+        if mode == "recurrent" and len(args.get_shape().as_list()) == 3:
+            noise_shape = [shape[0], 1, shape[-1]]
+        args = tf.cond(is_train, lambda: tf.nn.dropout(args, keep_prob, noise_shape=noise_shape) * scale, lambda: args)
+    return args
 
 def softmax_mask( val, mask):
     return -INF * (1 - tf.cast(mask, tf.float32)) + val

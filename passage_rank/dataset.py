@@ -30,7 +30,8 @@ class BRCDataset(object):
     """
     This module implements the APIs for loading and using baidu reading comprehension dataset
     """
-    def __init__(self, max_para_num, max_p_len, max_q_len,max_train_sample_num,files=[], test = False):
+    def __init__(self, max_para_num, max_p_len, max_q_len,max_train_sample_num,files=[], use_type = "train"):
+
         self.logger = logging.getLogger("brc")
 
         self.max_para = max_para_num
@@ -39,24 +40,26 @@ class BRCDataset(object):
         self.max_train_sample_num = max_train_sample_num
 
 
-        if 1:
-            self.train_set, self.dev_set, self.test_set = [], [], []
-            dataset = []
-            print(files)
-            if files:
-                if not test:
-                    for file in files:
-                        dataset += self._load_dataset(file, train=True, test = test)
-                else:
-                    for file in files:
-                        dataset += self._load_dataset(file, train=False, test = test)
-            if test == False:
-                random.shuffle(dataset)
-                self.train_set, self.dev_set, self.test_set = self.split_dataset_proportions(dataset)
-            else:
-                self.test_set = dataset
-                self.logger.info('Test set size: {} questions.'.format(len(self.test_set)))
-            self.logger.info('Train set size: {} questions.'.format(len(self.train_set)))
+
+        self.train_set, self.dev_set, self.test_set = [], [], []
+        dataset = []
+        print(files)
+        if files:
+             for file in files:
+                    dataset += self._load_dataset(file, use_type=use_type)
+
+        if use_type == "train":
+            random.shuffle(dataset)
+            self.train_set, self.dev_set, self.test_set = self.split_dataset_proportions(dataset)
+        elif use_type == "dev":
+            self.dev_set = dataset
+        else:
+            self.test_set = dataset
+
+
+        self.logger.info('Test set size: {} questions.'.format(len(self.test_set)))
+        self.logger.info('dev set size: {} questions.'.format(len(self.dev_set)))
+        self.logger.info('Train set size: {} questions.'.format(len(self.train_set)))
 
     def compute_rank(self, answer, fake_answer, number = 0):
         number = self.max_para
@@ -106,7 +109,7 @@ class BRCDataset(object):
 
         return train_set, val_set, test_set
 
-    def _load_dataset(self, data_path,max_para = 0, train=False, test = False):
+    def _load_dataset(self, data_path, use_type = ""):
 
         """
         Loads the dataset
@@ -123,7 +126,7 @@ class BRCDataset(object):
                 sample = json.loads(line.strip())
                 if Count > self.max_train_sample_num:
                     break
-                if train:
+                if use_type == "train":
                     if len(sample['answer_spans']) == 0:
                         continue
                     if sample['answer_spans'][0][1] >= self.max_p_len:
@@ -158,7 +161,7 @@ class BRCDataset(object):
 
                 for d_idx, doc in enumerate(sample['documents']):
                     #self.logger.info('无效：{}'.format(doc['is_selected']))
-                    if train and (not doc['is_selected']):
+                    if (use_type == "train" or use_type == "dev")and (not doc['is_selected']):
                         is_not_selected_counter+=1
                         continue
 
@@ -174,7 +177,7 @@ class BRCDataset(object):
                     if len(refer_p) < max_para:
                         for i in range(max_para - len(refer_p)):
                             refer_p.append(['.', '.'])
-                    if train:
+                    if use_type == "train" or use_type =="dev":
                         most_related_para = doc['most_related_para']
                         gold_p = doc['segmented_paragraphs'][most_related_para]
                         rank_p, index = self.compute_rank(refer_p, gold_p)  ############################
@@ -187,14 +190,35 @@ class BRCDataset(object):
                         sample2['index'] = index  ###########################
                         sample2['rank'] = rank
                         sample2['doc_idx'] = d_idx
-                    if test:
+                        sample2['mrp'] = most_related_para
+                    elif use_type == "test":
                         rank_p,index = self.compute_rank(refer_p, sample['segmented_question'])#############################
                         sample2['passages'] = {'passage_rank': rank_p}
                         sample2['index'] = index  ###########################
 
                         sample2['rank'] = rank
                         sample2['doc_idx'] = d_idx
-                    if train:
+
+                        para_infos = []
+                        ct = 0
+                        for answer_tokens in doc['segmented_paragraphs']:
+                            fake_tokens = sample['segmented_question']
+                            common_with_question = Counter(answer_tokens) & Counter(fake_tokens)
+                            correct_preds = sum(common_with_question.values())
+                            if correct_preds == 0:
+                                recall_wrt_question = 0
+                            else:
+                                recall_wrt_question = float(correct_preds) / len(fake_tokens)
+                            if len(answer_tokens) == 0:
+                                recall_wrt_question = -1
+                            elif answer_tokens[0] == '.' and len(answer_tokens) == 2:
+                                recall_wrt_question = -1
+                            para_infos.append((answer_tokens, recall_wrt_question, len(answer_tokens), ct))
+                            ct += 1
+                        para_infos.sort(key=lambda x: (-x[1], x[2]))
+                        gold = para_infos[0][3]
+                        sample2['mrp'] = gold
+                    if use_type == "train"or use_type =="dev":
                         if len(rank) == 0:
                             continue
                         else:
@@ -205,6 +229,7 @@ class BRCDataset(object):
                     sample2['question_id'] = sample['question_id']
 
                     data_set.append(sample2)
+
             self.logger.info('共筛选出{}个无效doc,共筛选出{}个doc'.format(is_not_selected_counter,Count))
         return data_set
 
@@ -236,7 +261,8 @@ class BRCDataset(object):
                       'question_id': [],
                       'doc_idx' : [],
                       'class_label':[],
-                      'index':[]#######################
+                      'index':[],#######################
+                      'mrp':[]##############
                       }
 
         for sidx, sample in enumerate(batch_data['raw_data']):
@@ -247,6 +273,7 @@ class BRCDataset(object):
                 batch_data['passage_token_ids'].append(passage_token_ids)
 
                 batch_data['index'].append(sample['index'])  #######################
+                batch_data['mrp'].append(sample['mrp'])  ######################
 
                 batch_data['passage_length'].append(min(len(passage_token_ids), self.max_p_len))
                 rank_id = sample['rank'][pidx]
@@ -306,7 +333,7 @@ class BRCDataset(object):
             vocab: the vocabulary on this dataset
         """
         for data_set in [self.train_set, self.dev_set, self.test_set]:
-            if data_set is None: continue
+            if (data_set is None) or (data_set == []) : continue
             for sample in data_set:
                 sample['question_token_ids'] = vocab.convert_to_ids(sample['question_tokens'])
                 passage_list = sample['passages']['passage_rank']
