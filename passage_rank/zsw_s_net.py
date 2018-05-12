@@ -359,7 +359,6 @@ class S_netModel():
                     fout.write(json.dumps(pred_answer, ensure_ascii=False) + '\n')
 
 
-
     def save(self, model_dir, model_prefix):
         """
         Saves the model into model_dir with model_prefix as the model indicator

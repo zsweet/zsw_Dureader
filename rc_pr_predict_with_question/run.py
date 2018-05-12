@@ -134,6 +134,8 @@ def parse_args():
                                help='the dir to store models')
     path_settings.add_argument('--result_dir', default='../data/results/search_emb',
                                help='the dir to output the results')
+    path_settings.add_argument('--result_prefix', default='result.json',
+                               help='the dir to output the results')
     path_settings.add_argument('--summary_dir', default='../data/summary/search_emb',
                                help='the dir to write tensorboard summary')
     path_settings.add_argument('--log_path',
@@ -347,7 +349,7 @@ def predict(args):
     predicts answers for test files
     """
     if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dirS)
+        os.makedirs(args.result_dir)
 
     logger = logging.getLogger("brc")
     logger.info('Load data_set and vocab...')
@@ -367,7 +369,7 @@ def predict(args):
     test_batches = brc_data.gen_mini_batches('test', args.batch_size,
                                              pad_id=vocab.get_id(vocab.pad_token), shuffle=False)
     rc_model.evaluate(test_batches,
-                      result_dir=args.result_dir, result_prefix='result.predicted')
+                      result_dir=args.result_dir, result_prefix=args.result_prefix)
 
 #
 # def predict(args):
